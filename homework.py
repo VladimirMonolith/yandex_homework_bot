@@ -13,15 +13,22 @@ from exceptions import BotExceptionError
 
 load_dotenv()
 
+logging.basicConfig(
+    level=logging.INFO,
+    filename='global.log',
+    format='%(asctime)s, %(levelname)s, %(name)s, '
+           '%(funcName)s, %(levelno)s, %(message)s'
+)
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 handler = StreamHandler(stream=sys.stdout)
+logger.addHandler(handler)
 formatter = Formatter(
     '%(asctime)s, %(levelname)s, %(name)s, '
     '%(funcName)s, %(levelno)s, %(message)s'
 )
 handler.setFormatter(formatter)
-logger.addHandler(handler)
 
 
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
@@ -56,14 +63,14 @@ def get_api_answer(current_timestamp):
     params = {'from_date': timestamp}
     try:
         api_response = requests.get(ENDPOINT, headers=HEADERS, params=params)
-        if api_response.status_code != HTTPStatus.OK:
-            logging.error('Эндпойнт недоступен')
-            raise BotExceptionError(
-                'Сервер проверки домашнего задания недоступен'
-            )
     except requests.exceptions.RequestException as error:
         logging.error(f'Проблема с доступом к эндпойнту.Ошибка {error}')
         raise BotExceptionError(error)
+    if api_response.status_code != HTTPStatus.OK:
+        logging.error('Эндпойнт недоступен')
+        raise BotExceptionError(
+            'Сервер проверки домашнего задания недоступен'
+        )
     return api_response.json()
 
 
@@ -148,7 +155,7 @@ def main():
             time.sleep(RETRY_TIME)
         except Exception as error:
             error_message = ''
-            message = f'Сбой в работе программы: {error}'
+            message = f'Сбой в работе программы:! {error}'
             if message not in error_message:
                 error_message = message
                 logging.critical(message)
