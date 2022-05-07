@@ -63,14 +63,14 @@ def get_api_answer(current_timestamp):
     params = {'from_date': timestamp}
     try:
         api_response = requests.get(ENDPOINT, headers=HEADERS, params=params)
+        if api_response.status_code != HTTPStatus.OK:
+            logging.error('Эндпойнт недоступен')
+            raise BotExceptionError(
+                'Сервер проверки домашнего задания недоступен'
+            )
     except requests.exceptions.RequestException as error:
         logging.error(f'Проблема с доступом к эндпойнту.Ошибка {error}')
         raise BotExceptionError(error)
-    if api_response.status_code != HTTPStatus.OK:
-        logging.error('Эндпойнт недоступен')
-        raise BotExceptionError(
-            'Сервер проверки домашнего задания недоступен'
-        )
     return api_response.json()
 
 
