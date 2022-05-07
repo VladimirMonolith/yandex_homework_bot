@@ -13,12 +13,6 @@ from exceptions import BotExceptionError
 
 load_dotenv()
 
-logging.basicConfig(
-    level=logging.INFO,
-    filename='global.log',
-    format='%(asctime)s, %(levelname)s, %(name)s, '
-           '%(funcName)s, %(levelno)s, %(message)s'
-)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -51,9 +45,9 @@ def send_message(bot, message):
     """Отправляет информационные сообщения в Telegram."""
     try:
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-        logging.info(f'Отправлено сообщение: {message}')
+        logger.info(f'Отправлено сообщение: {message}')
     except telegram.error.BadRequest as error:
-        logging.error(error)
+        logger.error(error)
         raise BotExceptionError(error)
 
 
@@ -64,12 +58,12 @@ def get_api_answer(current_timestamp):
     try:
         api_response = requests.get(ENDPOINT, headers=HEADERS, params=params)
         if api_response.status_code != HTTPStatus.OK:
-            logging.error('Эндпойнт недоступен')
+            logger.error('Эндпойнт недоступен')
             raise BotExceptionError(
                 'Сервер проверки домашнего задания недоступен'
             )
     except requests.exceptions.RequestException as error:
-        logging.error(f'Проблема с доступом к эндпойнту.Ошибка {error}')
+        logger.error(f'Проблема с доступом к эндпойнту.Ошибка {error}')
         raise BotExceptionError(error)
     return api_response.json()
 
@@ -77,21 +71,21 @@ def get_api_answer(current_timestamp):
 def check_response(response):
     """Проверяет ответ API на корректность."""
     if not isinstance(response, dict):
-        logging.error('Тип данных ответа API не является словарём')
+        logger.error('Тип данных ответа API не является словарём')
         raise TypeError('Тип данных ответа API не является словарём')
     elif 'homeworks' not in response:
-        logging.error('Ключ homeworks отсутствует в ответе API')
+        logger.error('Ключ homeworks отсутствует в ответе API')
         raise KeyError('Ключ homeworks отсутствует в ответе API')
     homeworks = response['homeworks']
     if not isinstance(homeworks, list):
-        logging.error(
+        logger.error(
             'Тип данных значения по ключу homeworks не является списком'
         )
         raise TypeError(
             'Тип данных значения по ключу homeworks не является списком'
         )
     elif not homeworks:
-        logging.debug('Статус проверки домашнего задания не обновлялся')
+        logger.debug('Статус проверки домашнего задания не обновлялся')
         return homeworks
     return homeworks[0]
 
@@ -100,7 +94,7 @@ def parse_status(homework):
     """Извлекает статус проверки домашнего задания."""
     for key in ('homework_name', 'status'):
         if key not in homework:
-            logging.error(
+            logger.error(
                 'Отсутствует необходимый ключ для определения статуса '
                 f'проверки домашнего задания - {key}'
             )
@@ -112,7 +106,7 @@ def parse_status(homework):
     homework_name = homework['homework_name']
     homework_status = homework['status']
     if homework_status not in HOMEWORK_STATUSES:
-        logging.error(
+        logger.error(
             'Незадокументированный статус проверки домашней работы'
         )
         raise KeyError(
@@ -133,12 +127,12 @@ def check_tokens():
         var_name for var_name, value in variables_data.items() if not value
     ]
     if no_value:
-        logging.critical(
+        logger.critical(
             f'Отсутствует обязательная/ые переменная/ые окружения: {no_value}.'
             'Программа принудительно остановлена.'
         )
         return False
-    logging.info('Необходимые переменные окружения доступны.')
+    logger.info('Необходимые переменные окружения доступны.')
     return True
 
 
@@ -163,7 +157,7 @@ def main():
             message = f'Сбой в работе программы: {error}'
             if message not in error_message:
                 error_message = message
-                logging.critical(message)
+                logger.critical(message)
                 send_message(bot, message)
             time.sleep(RETRY_TIME)
 
