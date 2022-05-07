@@ -124,19 +124,20 @@ def parse_status(homework):
 
 def check_tokens():
     """Проверяет доступность переменных окружения."""
-    critical_tokens_data = {
+    variables_data = {
         'PRACTICUM_TOKEN': PRACTICUM_TOKEN,
         'TELEGRAM_TOKEN': TELEGRAM_TOKEN,
         'TELEGRAM_CHAT_ID': TELEGRAM_CHAT_ID
     }
-    if not all((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)):
-        for token, value in critical_tokens_data.items():
-            if not value:
-                logging.critical(
-                    f'Отсутствует обязательная переменная окружения: {token}.'
-                    'Программа принудительно остановлена.'
-                )
-                return False
+    no_value = [
+        var_name for var_name, value in variables_data.items() if not value
+    ]
+    if no_value:
+        logging.critical(
+            f'Отсутствует обязательная/ые переменная/ые окружения: {no_value}.'
+            'Программа принудительно остановлена.'
+        )
+        return False
     logging.info('Необходимые переменные окружения доступны.')
     return True
 
@@ -145,17 +146,21 @@ def main():
     """Основная логика работы бота."""
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time())
+    error_message = ''
+    homework_status_message = ''
     while True:
         try:
             response = get_api_answer(current_timestamp)
             homework = check_response(response)
             current_timestamp = response.get('current_date', current_timestamp)
             if homework:
-                send_message(bot, parse_status(homework))
+                status_homework = parse_status(homework)
+                if status_homework not in homework_status_message:
+                    homework_status_message = status_homework
+                    send_message(bot, homework_status_message)
             time.sleep(RETRY_TIME)
         except Exception as error:
-            error_message = ''
-            message = f'Сбой в работе программы:! {error}'
+            message = f'Сбой в работе программы: {error}'
             if message not in error_message:
                 error_message = message
                 logging.critical(message)
