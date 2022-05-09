@@ -9,7 +9,7 @@ import requests
 import telegram
 from dotenv import load_dotenv
 
-from exceptions import BotExceptionError
+from exceptions import EndpointError, EndpointStatusError, SendMessageError
 
 load_dotenv()
 
@@ -34,7 +34,7 @@ ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
 
-HOMEWORK_STATUSES = {
+HOMEWORK_VERDICTS = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
@@ -45,10 +45,10 @@ def send_message(bot, message):
     """Отправляет информационные сообщения в Telegram."""
     try:
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-        logger.info(f'Отправлено сообщение: {message}')
-    except telegram.error.BadRequest as error:
-        logger.error(error)
-        raise BotExceptionError(error)
+        logger.info(f'Отправлено сообщение: {message}', exc_info=True)
+    except telegram.error.TelegramError as error:
+        logger.error(f'Ошибка при отправке сообщения: {error}', exc_info=True)
+        raise SendMessageError(f'Ошибка при отправке сообщения: {error}')
 
 
 def get_api_answer(current_timestamp):
@@ -58,34 +58,60 @@ def get_api_answer(current_timestamp):
     try:
         api_response = requests.get(ENDPOINT, headers=HEADERS, params=params)
         if api_response.status_code != HTTPStatus.OK:
-            logger.error('Эндпойнт недоступен')
-            raise BotExceptionError(
-                'Сервер проверки домашнего задания недоступен'
+            logger.error(
+                f'Эндпойнт {ENDPOINT} c параметрами {params} недоступен',
+                exc_info=True
             )
+            raise EndpointStatusError(
+                f'Эндпойнт {ENDPOINT} c параметрами {params} недоступен'
+            )
+        return api_response.json()
     except requests.exceptions.RequestException as error:
-        logger.error(f'Проблема с доступом к эндпойнту.Ошибка {error}')
-        raise BotExceptionError(error)
-    return api_response.json()
+        logger.error(
+            f'Проблема при обращении к {ENDPOINT}.Ошибка {error}',
+            exc_info=True
+        )
+        raise EndpointError(
+            f'Проблема при обращении к {ENDPOINT}.Ошибка {error}'
+        )
 
 
 def check_response(response):
     """Проверяет ответ API на корректность."""
     if not isinstance(response, dict):
-        logger.error('Тип данных ответа API не является словарём')
-        raise TypeError('Тип данных ответа API не является словарём')
+        logger.error(
+            f'Тип данных ответа API не является словарём: {response}',
+            exc_info=True
+        )
+        raise TypeError(
+            f'Тип данных ответа API не является словарём: {response}'
+        )
     elif 'homeworks' not in response:
-        logger.error('Ключ homeworks отсутствует в ответе API')
-        raise KeyError('Ключ homeworks отсутствует в ответе API')
+        logger.error(
+            'Ключ homeworks отсутствует в ответе API.'
+            f'Ключи ответа: {response.keys()}',
+            exc_info=True
+        )
+        raise KeyError(
+            'Ключ homeworks отсутствует в ответе API.'
+            f'Ключи ответа: {response.keys()}'
+        )
     homeworks = response['homeworks']
     if not isinstance(homeworks, list):
         logger.error(
-            'Тип данных значения по ключу homeworks не является списком'
+            'Тип данных значения по ключу homeworks'
+            f'не является списком: {homeworks}',
+            exc_info=True
         )
         raise TypeError(
-            'Тип данных значения по ключу homeworks не является списком'
+            'Тип данных значения по ключу homeworks'
+            f'не является списком: {homeworks}'
         )
     elif not homeworks:
-        logger.debug('Статус проверки домашнего задания не обновлялся')
+        logger.debug(
+            'Статус проверки домашнего задания не обновлялся',
+            exc_info=True
+        )
         return homeworks
     return homeworks[0]
 
@@ -96,24 +122,28 @@ def parse_status(homework):
         if key not in homework:
             logger.error(
                 'Отсутствует необходимый ключ для определения статуса '
-                f'проверки домашнего задания - {key}'
+                f'проверки домашнего задания: {key}',
+                exc_info=True
             )
             raise KeyError(
                 'Отсутствует необходимый ключ для определения статуса '
-                f'проверки домашнего задания - {key}'
+                f'проверки домашнего задания: {key}'
             )
 
     homework_name = homework['homework_name']
     homework_status = homework['status']
-    if homework_status not in HOMEWORK_STATUSES:
+    if homework_status not in HOMEWORK_VERDICTS:
         logger.error(
-            'Незадокументированный статус проверки домашней работы'
+            'Незадокументированный статус проверки '
+            f'домашней работы: {homework_status}',
+            exc_info=True
         )
         raise KeyError(
-            'Незадокументированный статус проверки домашней работы'
+            'Незадокументированный статус проверки '
+            f'домашней работы: {homework_status}'
         )
-    verdict = HOMEWORK_STATUSES[homework_status]
-    return f'Изменился статус проверки работы "{homework_name}".{verdict}'
+    verdict = HOMEWORK_VERDICTS[homework_status]
+    return f'Изменился статус проверки работы "{homework_name}": {verdict}'
 
 
 def check_tokens():
@@ -128,11 +158,13 @@ def check_tokens():
     ]
     if no_value:
         logger.critical(
-            f'Отсутствует обязательная/ые переменная/ые окружения: {no_value}.'
-            'Программа принудительно остановлена.'
+            'Отсутствует/ют обязательная/ые переменная/ые '
+            f'окружения: {no_value}.'
+            'Программа будет принудительно остановлена.',
+            exc_info=True
         )
         return False
-    logger.info('Необходимые переменные окружения доступны.')
+    logger.info('Необходимые переменные окружения доступны.', exc_info=True)
     return True
 
 
@@ -152,13 +184,15 @@ def main():
                 if status_homework not in homework_status_message:
                     homework_status_message = status_homework
                     send_message(bot, homework_status_message)
-            time.sleep(RETRY_TIME)
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
-            if message not in error_message:
+            if isinstance(error, SendMessageError):
+                logger.error(message, exc_info=True)
+            elif message not in error_message:
                 error_message = message
-                logger.critical(message)
+                logger.error(message, exc_info=True)
                 send_message(bot, message)
+        finally:
             time.sleep(RETRY_TIME)
 
 
@@ -166,4 +200,7 @@ if __name__ == "__main__":
     if check_tokens():
         main()
     else:
-        SystemExit()
+        sys.exit(
+            'Отсутствует/ют обязательная/ые переменная/ые окружения.'
+            'Программа принудительно остановлена.Подробности в логах.'
+        )
