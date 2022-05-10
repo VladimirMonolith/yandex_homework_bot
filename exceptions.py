@@ -1,4 +1,10 @@
-class SendMessageError(Exception):
+class NotForSendingError(Exception):
+    """Класс для ошибок, которые не предназначены для отправки в Telegram."""
+
+    pass
+
+
+class SendMessageError(NotForSendingError):
     """Класс для обработки ошибки при отправке сообщения в Telegram."""
 
     pass
