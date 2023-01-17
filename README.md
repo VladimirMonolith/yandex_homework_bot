@@ -34,4 +34,4 @@
 
 #### Автор
 
-Гут Владимир
+Гут Владимир - [https://github.com/VladimirMonolith](http://github.com/VladimirMonolith)
